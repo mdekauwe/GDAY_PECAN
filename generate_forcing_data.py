@@ -32,8 +32,8 @@ import pandas as pd
 import datetime as dt
 import netCDF4 as nc
 
-def r_interface_wrapper(site, outfile_tag, sub_daily=True, fpath=None,
-                        file_list=None):
+def r_interface_wrapper(site, outfile_tag, sub_daily=True, tsoil_run_mean=True,
+                        fpath=None, file_list=None):
     # Option to supply the path to where the files are in which case the code
     # will attempt to be smart and grab all the files. This could be a problem
     # if there is a gap in the year sequence. So there is also the option to
@@ -41,17 +41,20 @@ def r_interface_wrapper(site, outfile_tag, sub_daily=True, fpath=None,
     if file_list is None:
         file_list = glob.glob(os.path.join(fpath, "%s.*.nc" % site))
 
-    C = CreateMetData(site, file_list, outfile_tag, sub_daily)
+    C = CreateMetData(site, file_list, outfile_tag, sub_daily, tsoil_run_mean)
     C.main()
 
 
 class CreateMetData(object):
 
-    def __init__(self, site, file_list, outfile_tag, sub_daily=True):
+    def __init__(self, site, file_list, outfile_tag, sub_daily=True,
+                 tsoil_running_mean=True):
 
         self.file_list = file_list
         self.site = site
         self.sub_daily = sub_daily
+        # 7-day running mean vs. Tair 24 avg
+        self.tsoil_run_mean = tsoil_running_mean
 
         if self.sub_daily:
             self.spinup_ofname = "%s.30min_spin.csv" % (outfile_tag)
@@ -100,21 +103,22 @@ class CreateMetData(object):
         start_yr = df.index.year[0]
         end_yr = df.index.year[-1]
         ndep = -999.9
+        nfix = -999.9
         co2 = 285.0
         num_yrs = 20
         yr_sequence = self.get_random_year_sequence(start_yr, end_yr, num_yrs,
                                                     preserve_leap=False)
         self.write_spinup_file(df, yr_sequence, vary_co2=False,
                                co2_data=co2, vary_ndep=False,
-                               ndep_data=ndep)
+                               ndep_data=ndep, nfix=nfix)
 
         # Create a GDAY forcing file
         all_years = np.arange(start_yr, end_yr+1)
         self.write_met_file(df, all_years, vary_co2=True, co2_data=None,
-                            vary_ndep=False, ndep_data=ndep)
+                            vary_ndep=False, ndep_data=ndep, nfix=nfix)
 
     def write_spinup_file(self, df, yr_sequence, vary_co2=False, co2_data=None,
-                          vary_ndep=False, ndep_data=None):
+                          vary_ndep=False, ndep_data=None, nfix=None):
 
         start_sim = yr_sequence[0]
         end_sim = yr_sequence[-1]
@@ -122,13 +126,13 @@ class CreateMetData(object):
         (ofp, wr) = self.write_hdr(yr_sequence, spinup=True)
         if self.sub_daily:
             self.write_30min_data(df, yr_sequence, ofp, wr, vary_co2, co2_data,
-                                  vary_ndep, ndep_data)
+                                  vary_ndep, ndep_data, nfix)
         else:
             self.write_daily_data(df, yr_sequence, ofp, wr, vary_co2, co2_data,
-                                  vary_ndep, ndep_data)
+                                  vary_ndep, ndep_data, nfix)
 
     def write_met_file(self, df, yr_sequence, vary_co2=False, co2_data=None,
-                       vary_ndep=False, ndep_data=None):
+                       vary_ndep=False, ndep_data=None, nfix=None):
 
         start_sim = yr_sequence[0]
         end_sim = yr_sequence[-1]
@@ -136,10 +140,10 @@ class CreateMetData(object):
         (ofp, wr) = self.write_hdr(yr_sequence, spinup=False)
         if self.sub_daily:
             self.write_30min_data(df, yr_sequence, ofp, wr, vary_co2, co2_data,
-                                  vary_ndep, ndep_data)
+                                  vary_ndep, ndep_data, nfix)
         else:
             self.write_daily_data(df, yr_sequence, ofp, wr, vary_co2, co2_data,
-                                  vary_ndep, ndep_data)
+                                  vary_ndep, ndep_data, nfix)
 
     def write_hdr(self, yr_sequence, spinup=True):
         start_sim = yr_sequence[0]
@@ -154,7 +158,7 @@ class CreateMetData(object):
             ofname = self.forcing_ofname
 
         try:
-            ofp = open(ofname, 'wb')
+            ofp = open(ofname, 'w')
             wr = csv.writer(ofp, delimiter=',', quoting=csv.QUOTE_NONE,
                             escapechar=None, dialect='excel')
             wr.writerow(['# %s daily met %s' % (self.site, tag)])
@@ -188,7 +192,7 @@ class CreateMetData(object):
 
         D = pd.Series(tsoil, dates)
         window_size = 7
-        d_mva = pd.rolling_mean(D, window_size)
+        d_mva = D.rolling(window_size).mean()
 
         # The first few values will be nans, so we will use the 24-hr tair
         # values as replacements here
@@ -199,9 +203,10 @@ class CreateMetData(object):
         return (tsoil_data)
 
     def write_30min_data(self, df, yr_sequence, ofp, wr, vary_co2, co2_data,
-                          vary_ndep, ndep_data):
+                          vary_ndep, ndep_data, nfix):
 
-        tsoil_data = self.generate_soil_temp_data(yr_sequence, df)
+        if self.tsoil_run_mean:
+            tsoil_data = self.generate_soil_temp_data(yr_sequence, df)
 
         cnt = 0
         for i, yr in enumerate(yr_sequence):
@@ -222,8 +227,11 @@ class CreateMetData(object):
                         par = days_data.par[hod]
 
                     tair = days_data.tair[hod] - self.K_to_C
-                    #tsoil = np.mean(days_data.tair) - self.K_to_C
-                    tsoil = tsoil_data[cnt]
+                    if self.tsoil_run_mean:
+                        tsoil = tsoil_data[cnt]
+                    else:
+                        tsoil = np.mean(days_data.tair) - self.K_to_C
+
                     qair = days_data.qair[hod]
 
                     # co2 -> [ppm] Daily mean value
@@ -246,13 +254,13 @@ class CreateMetData(object):
                         vpd = 0.05
 
                     wr.writerow([yr, doy, hod, rain, par, tair, tsoil, vpd,\
-                                 co2, ndep, wind, press])
+                                 co2, ndep, nfix, wind, press])
                     cnt += 1
 
         ofp.close()
 
     def write_daily_data(self, df, yr_sequence, ofp, wr, vary_co2, co2_data,
-                         vary_ndep, ndep_data):
+                         vary_ndep, ndep_data, nfix):
 
         tsoil_data = self.generate_soil_temp_data(yr_sequence, df)
 
@@ -510,4 +518,5 @@ if __name__ == "__main__":
     fpath = "met_data"
     outfile_tag = "gday_met"
     sub_daily = False
-    r_interface_wrapper(site, outfile_tag, sub_daily, fpath)
+    tsoil_run_mean = False # 7-day running mean vs. Tair 24 avg
+    r_interface_wrapper(site, outfile_tag, sub_daily, tsoil_run_mean, fpath)

@@ -1,3 +1,4 @@
 met_data/*
 *.Rout
 .RData
+*.csv
