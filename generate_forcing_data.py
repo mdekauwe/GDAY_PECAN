@@ -248,6 +248,9 @@ class CreateMetData(object):
                         ndep = ndep_data
 
                     wind = days_data.wind[hod]
+                    if wind <= 0.0:
+                        wind = 0.1 # set v.small speed but not zero
+
                     press = days_data.press[hod] * self.PA_TO_KPA
                     vpd = self.qair_to_vpd(qair, tair, press)
                     if vpd < 0.05:
@@ -272,7 +275,7 @@ class CreateMetData(object):
                 days_data = days_data.reset_index()
 
                 morning = days_data.iloc[0:24][days_data.par >= 5.0]
-                afternoon = days_data.iloc[0:24][days_data.par >= 5.0]
+                afternoon = days_data.iloc[24:48][days_data.par >= 5.0]
                 day_light = days_data[days_data.par >= 5.0]
 
                 tair = np.mean(day_light["tair"]-self.K_to_C)
@@ -314,16 +317,19 @@ class CreateMetData(object):
                 # rain -> mm
                 # coversion 1800 seconds to half hours and summed gives day value.
                 # Going to use the whole day including the night data
-                rain = np.sum(days_data.rain * 1800.)
+                rain = max(0.0, np.sum(days_data.rain * 1800.))
 
                 # wind speed -> m/s
                 wind = np.mean(day_light.wind)
+                if wind <= 0.0:
+                    wind = 0.1 # set v.small speed but not zero
 
                 # odd occasions when there is no data, so set a very small
                 # wind speed.
                 wind_am = np.mean(morning.wind)
                 if len(morning.wind) == 0:
                     wind_am = 0.1
+
                 wind_pm = np.mean(afternoon.wind)
                 if len(afternoon.wind) == 0:
                     wind_pm = 0.1
@@ -347,9 +353,10 @@ class CreateMetData(object):
                 else:
                     ndep = ndep_data
 
-                wr.writerow([yr, doy, tair, rain, tsoil, tam, tpm, tmin, \
-                             tmax, tday, vpd_am, vpd_pm, co2, ndep, wind, \
+                wr.writerow([yr, doy, tair, rain, tsoil, tam, tpm, tmin, tmax,\
+                             tday, vpd_am, vpd_pm, co2, ndep, nfix, wind, \
                              press, wind_am, wind_pm, par_am, par_pm])
+
                 cnt += 1
         ofp.close()
 
@@ -506,17 +513,28 @@ class CreateMetData(object):
 
 if __name__ == "__main__":
 
-    #if len(sys.argv) != 4:
-    #    sys.exit()
+    if len(sys.argv) != 6:
+        sys.exit()
 
-    #site = sys.argv[1]
-    #fpath = sys.argv[2]
-    #outfile_tag = sys.argv[3]
-    #sub_daily = sys.argv[4]
+    site = sys.argv[1]
+    fpath = sys.argv[2]
+    outfile_tag = sys.argv[3]
 
+    if str(sys.argv[4]).upper() == "FALSE":
+        sub_daily = False      # Make 30-min file vs. Day, stick with day for now
+    else:
+        sub_daily = True      # Make 30-min file vs. Day, stick with day for now
+    if str(sys.argv[5]).upper() == "FALSE":
+        tsoil_run_mean = False      # Make 30-min file vs. Day, stick with day for now
+    else:
+        tsoil_run_mean = True      # Make 30-min file vs. Day, stick with day for now
+
+    """
     site = "US-NR1"
     fpath = "met_data"
-    outfile_tag = "gday_met"
+    outfile_tag = "US-NR1"
     sub_daily = False
     tsoil_run_mean = False # 7-day running mean vs. Tair 24 avg
+    """
+    print(site, outfile_tag, sub_daily, tsoil_run_mean, fpath)
     r_interface_wrapper(site, outfile_tag, sub_daily, tsoil_run_mean, fpath)

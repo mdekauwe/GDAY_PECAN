@@ -2,3 +2,7 @@ met_data/*
 *.Rout
 .RData
 *.csv
+met_data/*
+params/*
+outputs/*
+gday_met_files/*

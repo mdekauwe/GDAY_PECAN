@@ -9,15 +9,13 @@ setwd(wd)
 
 site = "US-NR1"
 fpath = "met_data"
-outfile_tag = "gday_met"
-sub_daily = "False"
+outfile_tag = "US-NR1"
+sub_daily = "false"      # Make 30-min file vs. Day, stick with day for now
+tsoil_run_mean = "false"  # Generate Tsoil from 7-day running mean or not
 
 command = "python"
 path2script = "generate_forcing_data.py"
-args = c(site, fpath, outfile_tag, sub_daily)
 
-# Add path to script as first arg
-all_args = c(path2script, args)
-
-all_args = paste(command, path2script, site, fpath, outfile_tag, sub_daily)
+all_args = paste(command, path2script, site, fpath, outfile_tag, sub_daily,
+                 tsoil_run_mean)
 system(all_args)
