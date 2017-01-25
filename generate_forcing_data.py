@@ -50,7 +50,7 @@ class CreateMetData(object):
     def __init__(self, site, file_list, outfile_tag, sub_daily=True,
                  tsoil_running_mean=True):
 
-        self.file_list = file_list
+        self.file_list = sorted(file_list)
         self.site = site
         self.sub_daily = sub_daily
         # 7-day running mean vs. Tair 24 avg
