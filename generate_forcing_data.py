@@ -48,13 +48,13 @@ def r_interface_wrapper(site, outfile_tag, sub_daily=True, tsoil_run_mean=True,
 class CreateMetData(object):
 
     def __init__(self, site, file_list, outfile_tag, sub_daily=True,
-                 tsoil_running_mean=True):
+                 tsoil_run_mean=True):
 
         self.file_list = sorted(file_list)
         self.site = site
         self.sub_daily = sub_daily
         # 7-day running mean vs. Tair 24 avg
-        self.tsoil_run_mean = tsoil_running_mean
+        self.tsoil_run_mean = tsoil_run_mean
 
         if self.sub_daily:
             self.spinup_ofname = "%s.30min_spin.csv" % (outfile_tag)
