@@ -265,7 +265,8 @@ class CreateMetData(object):
     def write_daily_data(self, df, yr_sequence, ofp, wr, vary_co2, co2_data,
                          vary_ndep, ndep_data, nfix):
 
-        tsoil_data = self.generate_soil_temp_data(yr_sequence, df)
+        if self.tsoil_run_mean:
+            tsoil_data = self.generate_soil_temp_data(yr_sequence, df)
 
         cnt = 0
         for i, yr in enumerate(yr_sequence):
@@ -283,7 +284,10 @@ class CreateMetData(object):
                 tam = np.mean(morning["tair"]-self.K_to_C)
                 tpm = np.mean(afternoon["tair"]-self.K_to_C)
                 #tsoil = np.mean(days_data["Tair"]-self.K_to_C)
-                tsoil = tsoil_data[cnt]
+                if self.tsoil_run_mean:
+                    tsoil = tsoil_data[cnt]
+                else:
+                    tsoil = np.mean(days_data.tair) - self.K_to_C
 
                 # daytime min/max temp
                 tmin = np.min(days_data["tair"]-self.K_to_C)
@@ -536,5 +540,5 @@ if __name__ == "__main__":
     sub_daily = False
     tsoil_run_mean = False # 7-day running mean vs. Tair 24 avg
     """
-    print(site, outfile_tag, sub_daily, tsoil_run_mean, fpath)
+
     r_interface_wrapper(site, outfile_tag, sub_daily, tsoil_run_mean, fpath)
